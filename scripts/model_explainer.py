@@ -9,27 +9,12 @@ import matplotlib.pyplot as plt
 
 class ModelExplainer:
     def __init__(self, model, X_test):
-        """
-        Initialize the Model Explainer with the trained model and test dataset.
 
-        Parameters:
-        -----------
-        model : Trained model object (e.g., RandomForest, XGBoost, etc.)
-        X_test : pandas DataFrame
-            Test dataset for generating explanations.
-        """
         self.model = model
         self.X_test = preprocess_data(X_test)
 
     def explain_with_shap(self, instance_idx=0):
-        """
-        Generate SHAP Summary Plot, Force Plot, and Dependence Plot.
-
-        Parameters:
-        -----------
-        instance_idx : int, optional (default=0)
-            The index of the instance to explain with the SHAP Force Plot.
-        """
+      
         print("Generating SHAP explanations...")
 
         explainer = shap.TreeExplainer(self.model)
@@ -55,14 +40,7 @@ class ModelExplainer:
         shap.dependence_plot(self.X_test.columns[0], shap_values[1] if isinstance(shap_values, list) else shap_values, self.X_test)
 
     def explain_with_lime(self, instance_idx=0):
-        """
-        Generate LIME Feature Importance Plot for a single instance.
-
-        Parameters:
-        -----------
-        instance_idx : int, optional (default=0)
-            The index of the instance to explain with LIME.
-        """
+      
         print("Generating LIME explanations...")
 
         explainer = lime_tabular.LimeTabularExplainer(
@@ -84,19 +62,7 @@ class ModelExplainer:
 
 
 def preprocess_data(X):
-    """
-    Ensure data is numeric, handle missing values, and convert categorical booleans to integers.
-
-    Parameters:
-    -----------
-    X : pandas DataFrame
-        Raw input dataset.
-
-    Returns:
-    --------
-    X : pandas DataFrame
-        Processed dataset with only numeric values.
-    """
+ 
     X = X.copy()
     for col in X.select_dtypes(include=['bool']).columns:
         X[col] = X[col].astype(int)  # Convert boolean to integer
