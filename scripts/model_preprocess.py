@@ -1,7 +1,8 @@
 import pandas as pd
 import argparse
 from sklearn.preprocessing import StandardScaler
-def preprocess(input_path,credit_input_path,output_path,credit_output_path):
+import joblib
+def preprocess(input_path,credit_input_path,output_path,credit_output_path,scaler_path):
     m=pd.read_csv(input_path)
     credit=pd.read_csv(credit_input_path)
     m['signup_time'] = pd.to_datetime(m['signup_time'])
@@ -28,6 +29,8 @@ def preprocess(input_path,credit_input_path,output_path,credit_output_path):
        'device_transaction_frequency', 'user_transaction_velocity']
     scaler= StandardScaler()
     m[numeric_col]=scaler.fit_transform(m[numeric_col])
+        # Save the scaler
+    joblib.dump(scaler, scaler_path)
     m.to_csv(output_path,index=False)
     #credit card part
     credit=credit.drop(columns='Time')
@@ -35,7 +38,7 @@ def preprocess(input_path,credit_input_path,output_path,credit_output_path):
     credit[col]=scaler.fit_transform(credit[col])
     credit.to_csv(credit_output_path,index=False)
 
-
+preprocess('/Users/amantebeje/Desktop/projects/FRAUD-DETECTION/Data/preprocessed/merged_data.csv','/Users/amantebeje/Desktop/projects/FRAUD-DETECTION/Data/raw/creditcard_edited.csv','/Users/amantebeje/Desktop/projects/FRAUD-DETECTION/Data/preprocessed/final_fraud1.csv','/Users/amantebeje/Desktop/projects/FRAUD-DETECTION/Data/preprocessed/final_credit.csv','/Users/amantebeje/Desktop/projects/FRAUD-DETECTION/model/scaler.pkl')
 
 if __name__ == "__main__" :
     parser= argparse.ArgumentParser()    

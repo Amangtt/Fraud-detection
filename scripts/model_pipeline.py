@@ -7,9 +7,6 @@ from sklearn.model_selection import train_test_split
 import joblib
 import mlflow
 import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, SimpleRNN, LSTM
-from tensorflow.keras.optimizers import Adam
 import numpy as np
 import os
 
@@ -19,27 +16,21 @@ os.makedirs("./model", exist_ok=True)
 def load_data(input_path):
     df = pd.read_csv(input_path)
 
-    # Convert True/False strings to 1/0
-    df = df.replace({'True': 1, 'False': 0})
-
     # Ensure the target column exists
     target_column = 'Class' if 'Class' in df.columns else 'class'
     
     # Separate target from features
-    y = df[target_column]
+    y = df[target_column].astype(np.float32)  # Convert target to float32
     x = df.drop(columns=[target_column])
 
-    # Convert categorical columns to numerical
-    categorical_cols = x.select_dtypes(include=['object']).columns
-    if len(categorical_cols) > 0:
-        print(f"Converting categorical columns: {list(categorical_cols)}")
-        x = pd.get_dummies(x, columns=categorical_cols)  # One-hot encoding
+    # Convert boolean columns to float32
+    bool_cols = x.select_dtypes(include=['bool']).columns
+    x[bool_cols] = x[bool_cols].astype(np.float32)
 
-    # Handle missing values
-    x.fillna(0, inplace=True)
+    # Ensure all features are float32
+    x = x.astype(np.float32)
 
-    return x, y
-
+    return x.to_numpy(), y.to_numpy()
 def train_test(x, y, test_size=0.2, random_state=42):
     return train_test_split(x, y, test_size=test_size, random_state=random_state)
 
@@ -62,41 +53,47 @@ def train_decision_tree(x_train, y_train):
     return model
 
 def train_rnn(x_train, y_train, x_test, y_test):
-    x_train_rnn = np.expand_dims(x_train.values, axis=1)  # Reshape for RNN
-    x_test_rnn = np.expand_dims(x_test.values, axis=1)
+    time_steps = 1  # Each row is treated as a single sequence
+    feature_size = x_train.shape[1]
+
+    x_train_rnn = x_train.reshape((x_train.shape[0], time_steps, feature_size))
+    x_test_rnn = x_test.reshape((x_test.shape[0], time_steps, feature_size))
 
     model = tf.keras.Sequential([
-        tf.keras.layers.SimpleRNN(64, activation='relu', input_shape=(1, x_train.shape[1])),
-        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.SimpleRNN(50, activation='relu', input_shape=(time_steps, feature_size)),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
     model.compile(loss=tf.keras.losses.binary_crossentropy, optimizer=tf.keras.optimizers.Adam(0.001), metrics=['accuracy'])
     model.fit(x_train_rnn, y_train, epochs=10, batch_size=32, validation_data=(x_test_rnn, y_test), verbose=1)
-    
-    model.save("./model/fraud_rnn_model")
+    joblib.dump(model, "./model/fraud_rnn_model.pkl")
+  
     return model
 
 def train_lstm(x_train, y_train, x_test, y_test):
-    x_train_lstm = np.expand_dims(x_train.values, axis=1)  # Reshape for LSTM
-    x_test_lstm = np.expand_dims(x_test.values, axis=1)
+    time_steps = 1  # Each row is treated as a single sequence
+    feature_size = x_train.shape[1]
+    x_train_lstm = x_train.reshape((x_train.shape[0], time_steps, feature_size)) # Reshape for LSTM
+    x_test_lstm = x_test.reshape((x_test.shape[0], time_steps, feature_size))
 
-    model = Sequential([
-        LSTM(64, activation='relu', input_shape=(1, x_train.shape[1])),
-        Dense(32, activation='relu'),
-        Dense(1, activation='sigmoid')
+    model = tf.keras.Sequential([
+        tf.keras.layers.LSTM(64, activation='relu', input_shape=(1, x_train.shape[1])),
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dense(1, activation='sigmoid')
     ])
     model.compile(loss=tf.keras.losses.binary_crossentropy, optimizer=tf.keras.optimizers.Adam(0.001), metrics=['accuracy'])
     model.fit(x_train_lstm, y_train, epochs=10, batch_size=32, validation_data=(x_test_lstm, y_test), verbose=1)
+    joblib.dump(model,"./model/fraud_lstm_model.pkl")
     
-    model.save("./model/fraud_lstm_model")
     return model
 
 def evaluate(model, x_test, y_test, is_deep_learning=False):
     if is_deep_learning:
-        x_test = np.expand_dims(x_test.values, axis=1)  # Reshape for RNN/LSTM
-        y_pred = (model.predict(x_test) > 0.5).astype(int)
-    else:
-        y_pred = model.predict(x_test)
+        x_test = np.expand_dims(x_test, axis=1)  # Reshape for RNN/LSTM
+    
+    y_pred = model.predict(x_test)
+
+    if is_deep_learning:
+        y_pred = (y_pred > 0.5).astype(int)  # Convert probabilities to binary class labels
 
     test_acc = accuracy_score(y_test, y_pred)
     precision = precision_score(y_test, y_pred)
@@ -113,17 +110,17 @@ def evaluate(model, x_test, y_test, is_deep_learning=False):
 def main():
     input_path = './Data/preprocessed/final_fraud.csv'
     x, y = load_data(input_path)
-    print(x.dtypes)
+  
     X_train, X_test, y_train, y_test = train_test(x, y)
 
     mlflow.set_experiment('fraud detection')
 
     models = {
-        #"RandomForest": (train_random_forest, False),
-        #"LogisticRegression": (train_logistic_reg, False),
-        #"DecisionTree": (train_decision_tree, False),
+        "RandomForest": (train_random_forest, False),
+        "LogisticRegression": (train_logistic_reg, False),
+        "DecisionTree": (train_decision_tree, False),
         "RNN": (train_rnn, True),
-        #"LSTM": (train_lstm, True)
+        "LSTM": (train_lstm, True)
     }
 
     for model_name, (train_function, is_deep_learning) in models.items():
